@@ -1,0 +1,15 @@
+name: OneBlockChunk
+version: '${project.version}'
+main: com.millsboss.oneblockchunk.OneBlockChunkPlugin
+api-version: '26.3'
+description: A craftable block that holds a whole mini chunk you can shrink into and play inside.
+author: MILLSBOSS
+load: POSTWORLD
+
+permissions:
+  oneblockchunk.use:
+    description: Jump on a OneBlock Chunk to shrink inside it
+    default: true
+  oneblockchunk.admin:
+    description: Use /oneblockchunk give
+    default: op
