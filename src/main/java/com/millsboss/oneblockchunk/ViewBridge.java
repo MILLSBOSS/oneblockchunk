@@ -46,9 +46,10 @@ public final class ViewBridge {
     private static final double SMALL = 1.0 / 16.0;
     private static final double GIANT = 16.0;
     /** Outside blocks shown around the pocket, each direction. */
-    private static final int RADIUS = 4;
-    private static final int BELOW = 3;
-    private static final int ABOVE = 8;
+    private static final int RADIUS = 12;
+    private static final int BELOW = 6;
+    private static final int ABOVE = 16;
+    private static final int MAX_CUBES = 6000;
 
     private final OneBlockChunkPlugin plugin;
 
@@ -108,7 +109,7 @@ public final class ViewBridge {
             mirrorInsideOut(id, key, ow, base, seenSmall);
             if (occupied.contains(id) && ow.isChunkLoaded(key.x() >> 4, key.z() >> 4)) {
                 mirrorOutsideIn(id, key, ow, base, seenGiant);
-                if (tick % 20 == 0 || surroundings.get(id) == null || surroundings.get(id).cubes.isEmpty()) {
+                if (tick % 40 == 0 || surroundings.get(id) == null || surroundings.get(id).cubes.isEmpty()) {
                     buildSurroundings(id, key, ow, base);
                 }
             }
@@ -175,8 +176,12 @@ public final class ViewBridge {
         Surroundings s = surroundings.computeIfAbsent(id, k -> new Surroundings());
         int minX = PocketGrid.minX(id), minZ = PocketGrid.minZ(id);
         Map<Long, BlockData> want = new HashMap<>();
-        for (int ox = -RADIUS; ox <= RADIUS; ox++) {
-            for (int oz = -RADIUS; oz <= RADIUS; oz++) {
+        // nearest rings first, so if the cap is hit it is the far edge that gets dropped
+        outer:
+        for (int ring = 0; ring <= RADIUS; ring++)
+        for (int ox = -ring; ox <= ring; ox++) {
+            for (int oz = -ring; oz <= ring; oz++) {
+                if (Math.max(Math.abs(ox), Math.abs(oz)) != ring) continue;
                 for (int oy = -BELOW; oy <= ABOVE; oy++) {
                     if (ox == 0 && oz == 0 && oy <= 0) continue; // that column is the pocket itself
                     Block b = ow.getBlockAt(key.x() + ox, key.y() + oy, key.z() + oz);
@@ -189,6 +194,7 @@ public final class ViewBridge {
                         default -> b.getBlockData();
                     };
                     want.put(pack(ox, oy, oz), data);
+                    if (want.size() >= MAX_CUBES) break outer;
                 }
             }
         }
@@ -210,14 +216,19 @@ public final class ViewBridge {
             if (s.cubes.containsKey(e.getKey())) continue;
             long p = e.getKey();
             int ox = unpackX(p), oy = unpackY(p), oz = unpackZ(p);
-            Location loc = new Location(pw, minX + ox * 16, base + (oy - 1) * 16, minZ + oz * 16);
-            if (!pw.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)) continue;
+            // All cubes live at the pocket's centre and are pushed out with a translation, so the
+            // server keeps sending them to players inside no matter how far out they reach.
+            Location anchor = new Location(pw, minX + 8, base, minZ + 8);
+            Vector3f offset = new Vector3f(ox * 16 - 8, (oy - 1) * 16, oz * 16 - 8);
             BlockData data = e.getValue();
-            BlockDisplay d = pw.spawn(loc, BlockDisplay.class, disp -> {
+            BlockDisplay d = pw.spawn(anchor, BlockDisplay.class, disp -> {
                 disp.setPersistent(false);
                 disp.setBlock(data);
-                disp.setViewRange(6f);
-                disp.setTransformation(new Transformation(new Vector3f(), new AxisAngle4f(),
+                disp.setViewRange(16f);
+                disp.setDisplayWidth(1024f);
+                disp.setDisplayHeight(1024f);
+                disp.setBrightness(new org.bukkit.entity.Display.Brightness(0, 15));
+                disp.setTransformation(new Transformation(offset, new AxisAngle4f(),
                         new Vector3f(16f, 16f, 16f), new AxisAngle4f()));
                 disp.addScoreboardTag(TAG);
             });
@@ -227,7 +238,7 @@ public final class ViewBridge {
     }
 
     private static boolean exposed(Block b, int ox, int oy, int oz) {
-        if (Math.abs(ox) == RADIUS || Math.abs(oz) == RADIUS || oy == ABOVE) return true;
+        if (oy == ABOVE) return true;
         for (int[] d : new int[][]{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
             if (oy == -BELOW && d[1] == -1) continue;
             if (!b.getRelative(d[0], d[1], d[2]).getType().isOccluding()) return true;
