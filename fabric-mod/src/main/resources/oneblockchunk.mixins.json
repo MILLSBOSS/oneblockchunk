@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "com.millsboss.oneblockchunk.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"LivingEntityAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

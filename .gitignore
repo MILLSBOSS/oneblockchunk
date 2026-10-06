@@ -2,3 +2,6 @@ target/
 .idea/
 *.iml
 .vscode/
+fabric-mod/build/
+fabric-mod/.gradle/
+fabric-mod/run/

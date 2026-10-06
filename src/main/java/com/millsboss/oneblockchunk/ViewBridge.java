@@ -48,9 +48,9 @@ public final class ViewBridge {
     private static final double SMALL = 1.0 / 16.0;
     private static final double GIANT = 16.0;
     /** Outside blocks shown around the pocket, each direction. */
-    private static final int RADIUS = 12;
-    private static final int BELOW = 6;
-    private static final int ABOVE = 16;
+    static final int RADIUS = 12;
+    static final int BELOW = 6;
+    static final int ABOVE = 16;
     private static final int MAX_CUBES = 6000;
 
     private final OneBlockChunkPlugin plugin;
@@ -266,6 +266,7 @@ public final class ViewBridge {
                     new Vector3f(16f, 16f, 16f), new AxisAngle4f()));
             disp.addScoreboardTag(TAG);
         });
+        plugin.modLink().hideFromModded(nd);
         s.cubes.put(p, nd);
         s.shown.put(p, data);
     }
@@ -315,6 +316,7 @@ public final class ViewBridge {
         if (copy == null) {
             copy = spawnCopy(src, target, scale);
             if (copy == null) return;
+            plugin.modLink().hideFromModded(copy);
             copies.put(src.getUniqueId(), copy);
             return;
         }

@@ -194,6 +194,7 @@ public final class MiniChunkRenderer {
                         new Vector3f(SCALE, SCALE, SCALE), new AxisAngle4f()));
                 disp.addScoreboardTag("oneblockchunk_mini");
             });
+            plugin.modLink().hideFromModded(d);
             model.displays.put(p, d);
             model.shown.put(p, data);
         }

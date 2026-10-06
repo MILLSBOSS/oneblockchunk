@@ -260,6 +260,7 @@ public final class BlockListener implements Listener {
 
     /** A block changed: redraw whichever view shows it, on the next tick. */
     private void dirtyAt(Block b) {
+        plugin.modLink().blockChanged(b);
         if (b.getWorld().equals(plugin.pocketWorld())) {
             int id = PocketGrid.idForBlock(b.getX(), b.getZ());
             if (id >= 0) plugin.renderer().markDirty(id);

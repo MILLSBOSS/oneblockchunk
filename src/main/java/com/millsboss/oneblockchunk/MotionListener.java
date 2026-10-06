@@ -27,6 +27,8 @@ public final class MotionListener implements Listener {
             if (e.getHand() == EquipmentSlot.OFF_HAND) c.swingOffHand();
             else c.swingMainHand();
         }
+        plugin.modLink().action(e.getPlayer().getUniqueId(),
+                e.getHand() == EquipmentSlot.OFF_HAND ? ModLink.ACT_SWING_OFF : ModLink.ACT_SWING_MAIN);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -35,6 +37,7 @@ public final class MotionListener implements Listener {
         if (attacker instanceof Projectile p && p.getShooter() instanceof Entity shooter) attacker = shooter;
         if (attacker instanceof org.bukkit.entity.Player || ViewBridge.isCopy(attacker)) return; // players swing via onSwing
         for (LivingEntity c : plugin.bridge().copiesOf(attacker.getUniqueId())) c.swingMainHand();
+        plugin.modLink().action(attacker.getUniqueId(), ModLink.ACT_SWING_MAIN);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -43,6 +46,7 @@ public final class MotionListener implements Listener {
         for (LivingEntity c : plugin.bridge().copiesOf(e.getEntity().getUniqueId())) {
             c.playHurtAnimation(0f);
         }
+        plugin.modLink().action(e.getEntity().getUniqueId(), ModLink.ACT_HURT);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

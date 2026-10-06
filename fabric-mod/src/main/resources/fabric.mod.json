@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "oneblockchunk",
+	"version": "${version}",
+	"name": "OneBlockChunk Client",
+	"description": "Live view for the OneBlockChunk Paper plugin: see the real chunk inside a OneBlock Chunk, and the real world outside it, at the right size.",
+	"authors": ["MILLSBOSS"],
+	"contact": {
+		"sources": "https://github.com/MILLSBOSS/oneblockchunk"
+	},
+	"license": "All-Rights-Reserved",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["com.millsboss.oneblockchunk.client.OneBlockChunkClient"]
+	},
+	"mixins": ["oneblockchunk.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

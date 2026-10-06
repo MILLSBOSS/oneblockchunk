@@ -32,6 +32,20 @@ real Minecraft chunk you can shrink into and play inside.
 Each OneBlock Chunk's chunk lives in a separate world, `oneblockchunk_pockets`. Only
 those chunks get vanilla terrain; everything around them is void.
 
+## Live view client mod (optional)
+
+Players who install the **OneBlockChunk Client** Fabric mod see the real thing instead of
+the copies: the actual chunk drawn at 1/16 on the block, and the actual outside area drawn
+at 16x around you when inside, with real mob and player models and real walking animation.
+Players without the mod can still join and see the copies as before.
+
+To install it, use Fabric Loader 0.19.5+ and Fabric API for Minecraft 26.3, then put
+`OneBlockChunk-Client-1.0.0.jar` in your `mods` folder. The server stays on Paper.
+
+The plugin detects the mod automatically when the player joins (it logs
+"... has the OneBlockChunk client mod"). The source is in `fabric-mod/`; build it with
+`./gradlew build` (Java 25).
+
 ## Commands
 
 - `/oneblockchunk give [player]` (alias `/obc`), permission `oneblockchunk.admin` (op)

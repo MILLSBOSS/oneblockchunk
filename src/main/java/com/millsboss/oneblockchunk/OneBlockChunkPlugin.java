@@ -28,6 +28,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
     private Travel travel;
     private World pocketWorld;
     private ViewBridge bridge;
+    private ModLink modLink;
 
     @Override
     public void onEnable() {
@@ -37,6 +38,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
         renderer = new MiniChunkRenderer(this);
         travel = new Travel(this);
         bridge = new ViewBridge(this);
+        modLink = new ModLink(this);
 
         pocketWorld = new WorldCreator(POCKET_WORLD)
                 .environment(World.Environment.NORMAL)
@@ -56,6 +58,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
         pm.registerEvents(new CopyListener(), this);
         pm.registerEvents(new MotionListener(this), this);
         pm.registerEvents(this, this);
+        getServer().getMessenger().registerOutgoingPluginChannel(this, ModLink.CHANNEL);
 
         // Clean up any mini models left behind by a crash, then draw the loaded ones.
         for (World w : Bukkit.getWorlds()) {
@@ -65,6 +68,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
         store.allPlaced().keySet().forEach(renderer::markDirty);
         Bukkit.getScheduler().runTaskTimer(this, renderer::flushDirty, 20L, 1L);
         Bukkit.getScheduler().runTaskTimer(this, bridge::tick, 40L, 1L);
+        Bukkit.getScheduler().runTaskTimer(this, modLink::tick, 41L, 1L);
 
         registerCommand();
         getLogger().info("OneBlockChunk enabled with " + store.allPlaced().size() + " placed chunk(s).");
@@ -83,6 +87,16 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         e.getPlayer().discoverRecipe(items.recipeKey());
+    }
+
+    @EventHandler
+    public void onChannel(org.bukkit.event.player.PlayerRegisterChannelEvent e) {
+        if (ModLink.CHANNEL.equals(e.getChannel())) modLink.playerRegistered(e.getPlayer());
+    }
+
+    @EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent e) {
+        modLink.playerLeft(e.getPlayer());
     }
 
     private void registerCommand() {
@@ -144,6 +158,10 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
 
     public MiniChunkRenderer renderer() {
         return renderer;
+    }
+
+    public ModLink modLink() {
+        return modLink;
     }
 
     public ViewBridge bridge() {
