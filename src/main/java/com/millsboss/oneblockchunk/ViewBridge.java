@@ -17,6 +17,8 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mannequin;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Pose;
+import org.bukkit.entity.Sittable;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
@@ -265,9 +267,49 @@ public final class ViewBridge {
             copy.teleport(target, TeleportFlag.EntityState.RETAIN_PASSENGERS);
         }
         copy.setBodyYaw(src.getBodyYaw());
-        if (copy instanceof Mannequin m && src instanceof Player p) {
-            if (Mannequin.validPoses().contains(p.getPose()) && m.getPose() != p.getPose()) m.setPose(p.getPose(), true);
-            if (tick % 10 == 0) copyGear(p, m);
+        mirrorState(src, copy);
+    }
+
+    /** Copy everything the real one is doing that shows: pose, sitting, fire, eating, bows, shields. */
+    private void mirrorState(LivingEntity src, LivingEntity copy) {
+        Pose pose = src.getPose();
+        if (pose != Pose.DYING && copy.getPose() != pose) {
+            if (!(copy instanceof Mannequin) || Mannequin.validPoses().contains(pose)) copy.setPose(pose, true);
+        }
+        if (src instanceof Sittable ss && copy instanceof Sittable cs && ss.isSitting() != cs.isSitting()) {
+            cs.setSitting(ss.isSitting());
+        }
+        boolean burning = src.getFireTicks() > 0 || src.isVisualFire();
+        if (copy.isVisualFire() != burning) copy.setVisualFire(burning);
+
+        if (copy instanceof Mannequin m && src instanceof Player p && (tick % 10 == 0 || p.isHandRaised() != m.isHandRaised())) {
+            copyGear(p, m);
+        }
+        if (src.isHandRaised()) {
+            if (!copy.isHandRaised()) copy.startUsingItem(src.getActiveItemHand());
+            copy.setActiveItemRemainingTime(Math.max(1, src.getActiveItemRemainingTime()));
+        } else if (copy.isHandRaised()) {
+            copy.clearActiveItem();
+        }
+    }
+
+    /** Every copy of this entity, tiny and giant. */
+    public java.util.List<LivingEntity> copiesOf(UUID source) {
+        java.util.List<LivingEntity> out = new java.util.ArrayList<>(2);
+        LivingEntity a = small.get(source), b = giant.get(source);
+        if (a != null && a.isValid()) out.add(a);
+        if (b != null && b.isValid()) out.add(b);
+        return out;
+    }
+
+    /** The real one died: its copies play the death animation too, then vanish. */
+    public void killCopies(UUID source) {
+        for (Map<UUID, LivingEntity> map : java.util.List.of(small, giant)) {
+            LivingEntity c = map.remove(source);
+            if (c == null || !c.isValid()) continue;
+            c.getEquipment().clear();
+            c.setInvulnerable(false);
+            c.setHealth(0);
         }
     }
 

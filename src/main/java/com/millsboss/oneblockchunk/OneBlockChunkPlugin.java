@@ -54,6 +54,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
         pm.registerEvents(new BlockListener(this), this);
         pm.registerEvents(new PlayerListener(this), this);
         pm.registerEvents(new CopyListener(), this);
+        pm.registerEvents(new MotionListener(this), this);
         pm.registerEvents(this, this);
 
         // Clean up any mini models left behind by a crash, then draw the loaded ones.
@@ -143,6 +144,10 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
 
     public MiniChunkRenderer renderer() {
         return renderer;
+    }
+
+    public ViewBridge bridge() {
+        return bridge;
     }
 
     public Travel travel() {
