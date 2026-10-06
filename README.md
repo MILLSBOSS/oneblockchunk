@@ -21,6 +21,11 @@ real Minecraft chunk you can shrink into and play inside.
   that side and grow back to normal size.
 - **Look at it**: the mini model updates within about a second of any change made inside,
   so all your work shows up on the block.
+- **Watch from outside**: every mob and player on the surface inside the chunk shows as a
+  tiny 1/16 copy moving around on the mini model, live.
+- **Look out from inside**: the area around the block is rebuilt around your chunk at 16x
+  scale (one outside block = one chunk), and players and mobs near the block show as 16x
+  giants. Someone standing next to the block looks like a giant standing next to your chunk.
 - **Break it**: it drops as an item tagged with its chunk number. Place it anywhere and your
   chunk, with everything you built, comes with it.
 

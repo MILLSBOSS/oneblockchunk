@@ -27,6 +27,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
     private MiniChunkRenderer renderer;
     private Travel travel;
     private World pocketWorld;
+    private ViewBridge bridge;
 
     @Override
     public void onEnable() {
@@ -35,6 +36,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
         items = new OneBlockItem(this);
         renderer = new MiniChunkRenderer(this);
         travel = new Travel(this);
+        bridge = new ViewBridge(this);
 
         pocketWorld = new WorldCreator(POCKET_WORLD)
                 .environment(World.Environment.NORMAL)
@@ -51,14 +53,17 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
         var pm = getServer().getPluginManager();
         pm.registerEvents(new BlockListener(this), this);
         pm.registerEvents(new PlayerListener(this), this);
+        pm.registerEvents(new CopyListener(), this);
         pm.registerEvents(this, this);
 
         // Clean up any mini models left behind by a crash, then draw the loaded ones.
         for (World w : Bukkit.getWorlds()) {
-            if (!w.equals(pocketWorld)) MiniChunkRenderer.sweepStrays(w);
+            MiniChunkRenderer.sweepStrays(w);
+            for (org.bukkit.entity.Entity e : w.getEntities()) if (ViewBridge.isCopy(e)) e.remove();
         }
         store.allPlaced().keySet().forEach(renderer::markDirty);
         Bukkit.getScheduler().runTaskTimer(this, renderer::flushDirty, 20L, 20L);
+        Bukkit.getScheduler().runTaskTimer(this, bridge::tick, 40L, 1L);
 
         registerCommand();
         getLogger().info("OneBlockChunk enabled with " + store.allPlaced().size() + " placed chunk(s).");
@@ -66,6 +71,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if (bridge != null) bridge.shutdown();
         if (renderer != null) renderer.removeAll();
         if (store != null) store.save();
         for (Player p : Bukkit.getOnlinePlayers()) {

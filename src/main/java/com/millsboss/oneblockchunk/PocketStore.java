@@ -40,6 +40,7 @@ public final class PocketStore {
 
     private final File file;
     private int nextId = 0;
+    private int nextSlot = 0;
     private final Map<Integer, BlockKey> placedById = new HashMap<>();
     private final Map<BlockKey, Integer> idByBlock = new HashMap<>();
     /** Each pocket's natural surface height, fixed the first time it is drawn. */
@@ -50,9 +51,23 @@ public final class PocketStore {
     }
 
     public void load() {
+        PocketGrid.clear();
         if (!file.exists()) return;
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
         nextId = yml.getInt("next-id", 0);
+        nextSlot = yml.getInt("next-slot", 0);
+        ConfigurationSection chunks = yml.getConfigurationSection("chunks");
+        for (int id = 0; id < nextId; id++) {
+            String c = chunks == null ? null : chunks.getString(Integer.toString(id));
+            int[] xz;
+            if (c != null) {
+                String[] parts = c.split(",");
+                xz = new int[]{Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim())};
+            } else {
+                xz = PocketGrid.legacySlot(id); // made by version 1.0
+            }
+            PocketGrid.register(id, xz[0], xz[1]);
+        }
         ConfigurationSection surface = yml.getConfigurationSection("surface");
         if (surface != null) {
             for (String k : surface.getKeys(false)) {
@@ -83,6 +98,10 @@ public final class PocketStore {
     public void save() {
         YamlConfiguration yml = new YamlConfiguration();
         yml.set("next-id", nextId);
+        yml.set("next-slot", nextSlot);
+        for (int id = 0; id < nextId; id++) {
+            if (PocketGrid.known(id)) yml.set("chunks." + id, PocketGrid.chunkX(id) + "," + PocketGrid.chunkZ(id));
+        }
         for (Map.Entry<Integer, Integer> e : surfaceById.entrySet()) {
             yml.set("surface." + e.getKey(), e.getValue());
         }
@@ -104,6 +123,8 @@ public final class PocketStore {
 
     public int newId() {
         int id = nextId++;
+        int[] xz = PocketGrid.newSlot(nextSlot++);
+        PocketGrid.register(id, xz[0], xz[1]);
         save();
         return id;
     }

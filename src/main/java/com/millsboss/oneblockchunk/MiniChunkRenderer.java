@@ -33,8 +33,8 @@ public final class MiniChunkRenderer {
     /** A column this far below the chunk's median height counts as a mined shaft. */
     private static final int SHAFT_DEPTH = 10;
 
-    private static final BlockData WATER_STANDIN = Material.LIGHT_BLUE_STAINED_GLASS.createBlockData();
-    private static final BlockData LAVA_STANDIN = Material.ORANGE_STAINED_GLASS.createBlockData();
+    static final BlockData WATER_STANDIN = Material.LIGHT_BLUE_STAINED_GLASS.createBlockData();
+    static final BlockData LAVA_STANDIN = Material.ORANGE_STAINED_GLASS.createBlockData();
 
     private final OneBlockChunkPlugin plugin;
 
@@ -50,6 +50,12 @@ public final class MiniChunkRenderer {
 
     public MiniChunkRenderer(OneBlockChunkPlugin plugin) {
         this.plugin = plugin;
+    }
+
+    /** Pocket y that sits at the top of the OneBlock Chunk, or null if never drawn yet. */
+    public Integer baseY(int id) {
+        Integer s = plugin.store().surface(id);
+        return s == null ? null : Math.max(plugin.pocketWorld().getMinHeight(), s - GROUND_LAYERS);
     }
 
     public void markDirty(int id) {
