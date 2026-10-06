@@ -42,6 +42,8 @@ public final class PocketStore {
     private int nextId = 0;
     private final Map<Integer, BlockKey> placedById = new HashMap<>();
     private final Map<BlockKey, Integer> idByBlock = new HashMap<>();
+    /** Each pocket's natural surface height, fixed the first time it is drawn. */
+    private final Map<Integer, Integer> surfaceById = new HashMap<>();
 
     public PocketStore(File dataFolder) {
         this.file = new File(dataFolder, "pockets.yml");
@@ -51,6 +53,16 @@ public final class PocketStore {
         if (!file.exists()) return;
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(file);
         nextId = yml.getInt("next-id", 0);
+        ConfigurationSection surface = yml.getConfigurationSection("surface");
+        if (surface != null) {
+            for (String k : surface.getKeys(false)) {
+                try {
+                    surfaceById.put(Integer.parseInt(k), surface.getInt(k));
+                } catch (NumberFormatException ignored) {
+                    // skip corrupt entry
+                }
+            }
+        }
         ConfigurationSection placed = yml.getConfigurationSection("placed");
         if (placed == null) return;
         for (String k : placed.getKeys(false)) {
@@ -71,6 +83,9 @@ public final class PocketStore {
     public void save() {
         YamlConfiguration yml = new YamlConfiguration();
         yml.set("next-id", nextId);
+        for (Map.Entry<Integer, Integer> e : surfaceById.entrySet()) {
+            yml.set("surface." + e.getKey(), e.getValue());
+        }
         for (Map.Entry<Integer, BlockKey> e : placedById.entrySet()) {
             String p = "placed." + e.getKey();
             BlockKey k = e.getValue();
@@ -99,6 +114,15 @@ public final class PocketStore {
 
     public Integer idAt(Block block) {
         return idByBlock.get(BlockKey.of(block));
+    }
+
+    public Integer surface(int id) {
+        return surfaceById.get(id);
+    }
+
+    public void setSurface(int id, int y) {
+        surfaceById.put(id, y);
+        save();
     }
 
     public BlockKey placement(int id) {

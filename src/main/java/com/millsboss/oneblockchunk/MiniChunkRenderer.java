@@ -30,6 +30,8 @@ public final class MiniChunkRenderer {
     /** Layers of ground shown below the lowest surface point. */
     private static final int GROUND_LAYERS = 3;
     private static final int MAX_DISPLAYS = 3000;
+    /** A column this far below the chunk's median height counts as a mined shaft. */
+    private static final int SHAFT_DEPTH = 10;
 
     private static final BlockData WATER_STANDIN = Material.LIGHT_BLUE_STAINED_GLASS.createBlockData();
     private static final BlockData LAVA_STANDIN = Material.ORANGE_STAINED_GLASS.createBlockData();
@@ -96,27 +98,30 @@ public final class MiniChunkRenderer {
     }
 
     private void apply(int id, Block base, ChunkSnapshot snap, int worldMin, int worldMax) {
-        // 1. find the vertical window to show
+        // 1. find the vertical window to show: only the surface. The bottom is pinned to the
+        //    pocket's natural surface, so mining deep inside never stretches the model down.
+        int[] tops = new int[256];
+        int n = 0;
         int maxTop = worldMin;
-        int minTop = worldMax;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                int top = worldMin - 1;
                 for (int y = worldMax - 1; y >= worldMin; y--) {
                     if (!snap.getBlockType(x, y, z).isAir()) {
-                        top = y;
+                        tops[n++] = y;
+                        maxTop = Math.max(maxTop, y);
                         break;
                     }
                 }
-                if (top < worldMin) continue;
-                maxTop = Math.max(maxTop, top);
-                minTop = Math.min(minTop, top);
             }
         }
-        if (minTop > maxTop) { // completely empty pocket
-            minTop = maxTop = worldMin;
+        Integer surface = plugin.store().surface(id);
+        if (surface == null) {
+            surface = naturalSurface(tops, n, worldMin);
+            plugin.store().setSurface(id, surface);
         }
-        int minY = Math.max(worldMin, Math.max(minTop - GROUND_LAYERS, maxTop - MAX_LAYERS + 1));
+        int minY = Math.max(worldMin, surface - GROUND_LAYERS);
+        maxTop = Math.max(maxTop, minY);
+        maxTop = Math.min(maxTop, minY + MAX_LAYERS - 1); // very tall builds get their top cut
 
         // 2. collect visible blocks, top down, until the cap
         Map<Long, BlockData> want = new HashMap<>();
@@ -177,6 +182,22 @@ public final class MiniChunkRenderer {
             model.displays.put(p, d);
             model.shown.put(p, data);
         }
+    }
+
+    /**
+     * Lowest natural ground level of the chunk. Columns sitting far below the typical
+     * height are treated as dug-out shafts and ignored, so chunks that were already
+     * mined before this was recorded still get a sensible surface.
+     */
+    private static int naturalSurface(int[] tops, int n, int worldMin) {
+        if (n == 0) return worldMin;
+        int[] sorted = java.util.Arrays.copyOf(tops, n);
+        java.util.Arrays.sort(sorted);
+        int median = sorted[n / 2];
+        for (int t : sorted) {
+            if (t >= median - SHAFT_DEPTH) return t;
+        }
+        return median;
     }
 
     private static boolean visible(ChunkSnapshot s, int x, int y, int z, int minY, int maxY) {
