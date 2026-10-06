@@ -111,8 +111,11 @@ public final class ViewBridge {
             mirrorInsideOut(id, key, ow, base, seenSmall);
             if (occupied.contains(id) && ow.isChunkLoaded(key.x() >> 4, key.z() >> 4)) {
                 mirrorOutsideIn(id, key, ow, base, seenGiant);
-                if (tick % 40 == 0 || surroundings.get(id) == null || surroundings.get(id).cubes.isEmpty()) {
-                    buildSurroundings(id, key, ow, base);
+                Surroundings sur = surroundings.get(id);
+                if (sur == null || sur.cubes.isEmpty() || tick % 200 == 0) {
+                    buildSurroundings(id, key, ow, base); // full pass now and then catches anything missed
+                } else {
+                    applyOutsideChanges(id, key, ow, base);
                 }
             }
         }
@@ -173,70 +176,123 @@ public final class ViewBridge {
         }
     }
 
-    private void buildSurroundings(int id, PocketStore.BlockKey key, World ow, int base) {
+    /** Outside blocks that changed since last tick, per pocket (packed offsets). */
+    private final Map<Integer, Set<Long>> outsideChanges = new HashMap<>();
+
+    /** A block changed in the outside world: queue it if some pocket is looking at it. */
+    public void outsideChanged(Block b) {
+        for (Map.Entry<Integer, PocketStore.BlockKey> e : plugin.store().allPlaced().entrySet()) {
+            PocketStore.BlockKey k = e.getValue();
+            if (!surroundings.containsKey(e.getKey()) || !k.world().equals(b.getWorld().getUID())) continue;
+            int ox = b.getX() - k.x(), oy = b.getY() - k.y(), oz = b.getZ() - k.z();
+            if (Math.abs(ox) > RADIUS || Math.abs(oz) > RADIUS || oy < -BELOW - 1 || oy > ABOVE + 1) continue;
+            outsideChanges.computeIfAbsent(e.getKey(), x -> new HashSet<>()).add(pack(ox, oy, oz));
+        }
+    }
+
+    /** Redraw just the changed outside blocks and their neighbours (their faces may now show). */
+    private void applyOutsideChanges(int id, PocketStore.BlockKey key, World ow, int base) {
+        Set<Long> changes = outsideChanges.remove(id);
+        Surroundings s = surroundings.get(id);
+        if (changes == null || s == null) return;
+        Set<Long> todo = new HashSet<>();
+        for (long p : changes) {
+            int ox = unpackX(p), oy = unpackY(p), oz = unpackZ(p);
+            todo.add(p);
+            todo.add(pack(ox + 1, oy, oz));
+            todo.add(pack(ox - 1, oy, oz));
+            todo.add(pack(ox, oy + 1, oz));
+            todo.add(pack(ox, oy - 1, oz));
+            todo.add(pack(ox, oy, oz + 1));
+            todo.add(pack(ox, oy, oz - 1));
+        }
+        for (long p : todo) {
+            int ox = unpackX(p), oy = unpackY(p), oz = unpackZ(p);
+            if (Math.abs(ox) > RADIUS || Math.abs(oz) > RADIUS || oy < -BELOW || oy > ABOVE) continue;
+            setCube(s, id, base, p, cubeAt(ow, key, ox, oy, oz));
+        }
+    }
+
+    /** What the giant cube at this offset should show, or null for nothing. */
+    private static BlockData cubeAt(World ow, PocketStore.BlockKey key, int ox, int oy, int oz) {
+        if (ox == 0 && oz == 0 && oy <= 0) return null; // that column is the pocket itself
+        Block b = ow.getBlockAt(key.x() + ox, key.y() + oy, key.z() + oz);
+        Material t = b.getType();
+        if (t.isAir() || t == Material.LIGHT || t == Material.BARRIER) return null;
+        if (!exposed(b, ox, oy, oz)) return null;
+        return switch (t) {
+            case WATER, BUBBLE_COLUMN -> MiniChunkRenderer.WATER_STANDIN;
+            case LAVA -> MiniChunkRenderer.LAVA_STANDIN;
+            default -> b.getBlockData();
+        };
+    }
+
+    private void setCube(Surroundings s, int id, int base, long p, BlockData data) {
+        BlockDisplay d = s.cubes.get(p);
+        if (d != null && !d.isValid()) {
+            s.cubes.remove(p);
+            s.shown.remove(p);
+            d = null;
+        }
+        if (data == null) {
+            if (d != null) {
+                d.remove();
+                s.cubes.remove(p);
+                s.shown.remove(p);
+            }
+            return;
+        }
+        if (d != null) {
+            if (!data.equals(s.shown.get(p))) {
+                d.setBlock(data);
+                s.shown.put(p, data);
+            }
+            return;
+        }
         World pw = plugin.pocketWorld();
+        int ox = unpackX(p), oy = unpackY(p), oz = unpackZ(p);
+        // All cubes live at the pocket's centre and are pushed out with a translation, so the
+        // server keeps sending them to players inside no matter how far out they reach.
+        Location anchor = new Location(pw, PocketGrid.minX(id) + 8, base, PocketGrid.minZ(id) + 8);
+        Vector3f offset = new Vector3f(ox * 16 - 8, (oy - 1) * 16, oz * 16 - 8);
+        BlockDisplay nd = pw.spawn(anchor, BlockDisplay.class, disp -> {
+            disp.setPersistent(false);
+            disp.setBlock(data);
+            disp.setViewRange(16f);
+            disp.setDisplayWidth(1024f);
+            disp.setDisplayHeight(1024f);
+            disp.setBrightness(new org.bukkit.entity.Display.Brightness(0, 15));
+            disp.setTransformation(new Transformation(offset, new AxisAngle4f(),
+                    new Vector3f(16f, 16f, 16f), new AxisAngle4f()));
+            disp.addScoreboardTag(TAG);
+        });
+        s.cubes.put(p, nd);
+        s.shown.put(p, data);
+    }
+
+    private void buildSurroundings(int id, PocketStore.BlockKey key, World ow, int base) {
         Surroundings s = surroundings.computeIfAbsent(id, k -> new Surroundings());
-        int minX = PocketGrid.minX(id), minZ = PocketGrid.minZ(id);
+        outsideChanges.remove(id); // covered by the full pass
         Map<Long, BlockData> want = new HashMap<>();
         // nearest rings first, so if the cap is hit it is the far edge that gets dropped
         outer:
-        for (int ring = 0; ring <= RADIUS; ring++)
-        for (int ox = -ring; ox <= ring; ox++) {
-            for (int oz = -ring; oz <= ring; oz++) {
-                if (Math.max(Math.abs(ox), Math.abs(oz)) != ring) continue;
-                for (int oy = -BELOW; oy <= ABOVE; oy++) {
-                    if (ox == 0 && oz == 0 && oy <= 0) continue; // that column is the pocket itself
-                    Block b = ow.getBlockAt(key.x() + ox, key.y() + oy, key.z() + oz);
-                    Material t = b.getType();
-                    if (t.isAir() || t == Material.LIGHT || t == Material.BARRIER) continue;
-                    if (!exposed(b, ox, oy, oz)) continue;
-                    BlockData data = switch (t) {
-                        case WATER, BUBBLE_COLUMN -> MiniChunkRenderer.WATER_STANDIN;
-                        case LAVA -> MiniChunkRenderer.LAVA_STANDIN;
-                        default -> b.getBlockData();
-                    };
-                    want.put(pack(ox, oy, oz), data);
-                    if (want.size() >= MAX_CUBES) break outer;
+        for (int ring = 0; ring <= RADIUS; ring++) {
+            for (int ox = -ring; ox <= ring; ox++) {
+                for (int oz = -ring; oz <= ring; oz++) {
+                    if (Math.max(Math.abs(ox), Math.abs(oz)) != ring) continue;
+                    for (int oy = -BELOW; oy <= ABOVE; oy++) {
+                        BlockData data = cubeAt(ow, key, ox, oy, oz);
+                        if (data == null) continue;
+                        want.put(pack(ox, oy, oz), data);
+                        if (want.size() >= MAX_CUBES) break outer;
+                    }
                 }
             }
         }
-        Iterator<Map.Entry<Long, BlockDisplay>> it = s.cubes.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<Long, BlockDisplay> e = it.next();
-            BlockData target = want.get(e.getKey());
-            BlockDisplay d = e.getValue();
-            if (target == null || !d.isValid()) {
-                if (d.isValid()) d.remove();
-                it.remove();
-                s.shown.remove(e.getKey());
-            } else if (!target.equals(s.shown.get(e.getKey()))) {
-                d.setBlock(target);
-                s.shown.put(e.getKey(), target);
-            }
+        for (Long p : new java.util.ArrayList<>(s.cubes.keySet())) {
+            if (!want.containsKey(p)) setCube(s, id, base, p, null);
         }
-        for (Map.Entry<Long, BlockData> e : want.entrySet()) {
-            if (s.cubes.containsKey(e.getKey())) continue;
-            long p = e.getKey();
-            int ox = unpackX(p), oy = unpackY(p), oz = unpackZ(p);
-            // All cubes live at the pocket's centre and are pushed out with a translation, so the
-            // server keeps sending them to players inside no matter how far out they reach.
-            Location anchor = new Location(pw, minX + 8, base, minZ + 8);
-            Vector3f offset = new Vector3f(ox * 16 - 8, (oy - 1) * 16, oz * 16 - 8);
-            BlockData data = e.getValue();
-            BlockDisplay d = pw.spawn(anchor, BlockDisplay.class, disp -> {
-                disp.setPersistent(false);
-                disp.setBlock(data);
-                disp.setViewRange(16f);
-                disp.setDisplayWidth(1024f);
-                disp.setDisplayHeight(1024f);
-                disp.setBrightness(new org.bukkit.entity.Display.Brightness(0, 15));
-                disp.setTransformation(new Transformation(offset, new AxisAngle4f(),
-                        new Vector3f(16f, 16f, 16f), new AxisAngle4f()));
-                disp.addScoreboardTag(TAG);
-            });
-            s.cubes.put(p, d);
-            s.shown.put(p, data);
-        }
+        for (Map.Entry<Long, BlockData> e : want.entrySet()) setCube(s, id, base, e.getKey(), e.getValue());
     }
 
     private static boolean exposed(Block b, int ox, int oy, int oz) {
@@ -423,6 +479,7 @@ public final class ViewBridge {
     }
 
     private void clearSurroundings(int id) {
+        outsideChanges.remove(id);
         Surroundings s = surroundings.remove(id);
         if (s == null) return;
         removeCubes(s);

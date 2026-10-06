@@ -62,12 +62,20 @@ public final class MiniChunkRenderer {
         dirty.add(id);
     }
 
-    /** Called on a timer: redraw any placed pockets that changed. */
+    private int tick;
+    /** Tick each pocket was last redrawn, so non-stop mining can't redraw it every single tick. */
+    private final Map<Integer, Integer> lastDrawn = new HashMap<>();
+    private static final int MIN_TICKS_BETWEEN = 3;
+
+    /** Runs every tick: redraw any placed pockets that changed. */
     public void flushDirty() {
+        tick++;
         if (dirty.isEmpty()) return;
         Iterator<Integer> it = dirty.iterator();
         while (it.hasNext()) {
             int id = it.next();
+            Integer last = lastDrawn.get(id);
+            if (last != null && tick - last < MIN_TICKS_BETWEEN) continue; // stays dirty, next tick
             PocketStore.BlockKey key = plugin.store().placement(id);
             if (key == null) {
                 it.remove();
@@ -79,6 +87,7 @@ public final class MiniChunkRenderer {
                 continue;
             }
             it.remove();
+            lastDrawn.put(id, tick);
             render(id);
         }
     }

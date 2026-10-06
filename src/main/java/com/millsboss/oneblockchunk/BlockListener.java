@@ -53,7 +53,10 @@ public final class BlockListener implements Listener {
             return;
         }
         ItemStack item = e.getItemInHand();
-        if (!plugin.items().isOneBlock(item)) return;
+        if (!plugin.items().isOneBlock(item)) {
+            dirtyAt(b);
+            return;
+        }
         int id = plugin.items().pocketId(item);
         if (id >= 0 && plugin.store().placement(id) != null) {
             e.setCancelled(true);
@@ -78,7 +81,10 @@ public final class BlockListener implements Listener {
             return;
         }
         Integer id = plugin.store().idAt(b);
-        if (id == null) return;
+        if (id == null) {
+            dirtyAt(b);
+            return;
+        }
         e.setDropItems(false);
         e.setExpToDrop(0);
         // Always drop it (even in creative) so the pocket and its builds are never lost.
@@ -114,13 +120,16 @@ public final class BlockListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onPistonExtend(BlockPistonExtendEvent e) {
         for (Block b : e.getBlocks()) if (isOneBlock(b)) { e.setCancelled(true); return; }
-        if (e.getBlock().getWorld().equals(plugin.pocketWorld())) dirtyAt(e.getBlock());
+        dirtyAt(e.getBlock());
+        for (Block b : e.getBlocks()) { dirtyAt(b); dirtyAt(b.getRelative(e.getDirection())); }
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onPistonRetract(BlockPistonRetractEvent e) {
         for (Block b : e.getBlocks()) if (isOneBlock(b)) { e.setCancelled(true); return; }
-        if (e.getBlock().getWorld().equals(plugin.pocketWorld())) dirtyAt(e.getBlock());
+        dirtyAt(e.getBlock());
+        dirtyAt(e.getBlock().getRelative(e.getDirection(), 1));
+        for (Block b : e.getBlocks()) { dirtyAt(b); dirtyAt(b.getRelative(e.getDirection())); }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -136,7 +145,7 @@ public final class BlockListener implements Listener {
     private void handleExplosion(List<Block> blocks) {
         // OneBlock Chunks are blast-proof; pocket explosions refresh the model.
         blocks.removeIf(this::isOneBlock);
-        if (!blocks.isEmpty()) dirtyAt(blocks.getFirst());
+        for (Block b : blocks) dirtyAt(b);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -166,7 +175,10 @@ public final class BlockListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onBucketEmpty(PlayerBucketEmptyEvent e) {
-        if (!e.getBlock().getWorld().equals(plugin.pocketWorld())) return;
+        if (!e.getBlock().getWorld().equals(plugin.pocketWorld())) {
+            dirtyAt(e.getBlock());
+            return;
+        }
         if (!insideOwnPocket(e.getPlayer(), e.getBlock())) e.setCancelled(true);
         else dirtyAt(e.getBlock());
     }
@@ -178,7 +190,10 @@ public final class BlockListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onFlow(BlockFromToEvent e) {
-        if (!e.getBlock().getWorld().equals(plugin.pocketWorld())) return;
+        if (!e.getBlock().getWorld().equals(plugin.pocketWorld())) {
+            dirtyAt(e.getToBlock());
+            return;
+        }
         // keep fluids from pouring into the void around the pocket
         if (PocketGrid.idForBlock(e.getToBlock().getX(), e.getToBlock().getZ())
                 != PocketGrid.idForBlock(e.getBlock().getX(), e.getBlock().getZ())) {
@@ -210,7 +225,8 @@ public final class BlockListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onTree(StructureGrowEvent e) {
-        if (e.getLocation().getWorld().equals(plugin.pocketWorld())) dirtyAt(e.getLocation().getBlock());
+        for (org.bukkit.block.BlockState st : e.getBlocks()) dirtyAt(st.getBlock());
+        dirtyAt(e.getLocation().getBlock());
     }
 
     // ---- show / hide models with the chunk they sit in ----
@@ -242,9 +258,13 @@ public final class BlockListener implements Listener {
         return id >= 0 && PocketGrid.idForBlock(b.getX(), b.getZ()) == id;
     }
 
+    /** A block changed: redraw whichever view shows it, on the next tick. */
     private void dirtyAt(Block b) {
-        if (!b.getWorld().equals(plugin.pocketWorld())) return;
-        int id = PocketGrid.idForBlock(b.getX(), b.getZ());
-        if (id >= 0) plugin.renderer().markDirty(id);
+        if (b.getWorld().equals(plugin.pocketWorld())) {
+            int id = PocketGrid.idForBlock(b.getX(), b.getZ());
+            if (id >= 0) plugin.renderer().markDirty(id);
+        } else {
+            plugin.bridge().outsideChanged(b);
+        }
     }
 }

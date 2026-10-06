@@ -63,7 +63,7 @@ public final class OneBlockChunkPlugin extends JavaPlugin implements Listener {
             for (org.bukkit.entity.Entity e : w.getEntities()) if (ViewBridge.isCopy(e)) e.remove();
         }
         store.allPlaced().keySet().forEach(renderer::markDirty);
-        Bukkit.getScheduler().runTaskTimer(this, renderer::flushDirty, 20L, 20L);
+        Bukkit.getScheduler().runTaskTimer(this, renderer::flushDirty, 20L, 1L);
         Bukkit.getScheduler().runTaskTimer(this, bridge::tick, 40L, 1L);
 
         registerCommand();
